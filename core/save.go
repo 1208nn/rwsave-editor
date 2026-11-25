@@ -45,10 +45,19 @@ type Team struct {
 // CanSetHuman 说明能否安全改回人类：真实 AI 运行数据无法在不破坏存档的前提下剥离。
 func (t Team) CanSetHuman() bool { return !t.IsAI || t.aiStateLen > 0 }
 
-// LooksLikeAI 判断队伍名是否像游戏自带的人机，例如 "AI - Very Hard"。
+// LooksLikeAI 判断队伍名是否符合游戏自带的人机格式，例如 "AI - Very Hard"。
 func LooksLikeAI(name string) bool {
-	n := strings.ToLower(strings.TrimSpace(name))
-	return n == "ai" || strings.HasPrefix(n, "ai ") || strings.HasPrefix(n, "ai-") || strings.HasPrefix(n, "ai_")
+	n := strings.TrimSpace(name)
+	const prefix = "AI - "
+	if !strings.HasPrefix(n, prefix) {
+		return false
+	}
+	switch strings.TrimSpace(n[len(prefix):]) {
+	case "Very Easy", "Easy", "Medium", "Hard", "Very Hard", "Impossible":
+		return true
+	default:
+		return false
+	}
 }
 
 // DiffNames 是 aiDifficulty 0-5 对应的中文显示名。
