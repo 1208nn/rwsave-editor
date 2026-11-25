@@ -62,6 +62,17 @@ func DiffName(d int32) string {
 	return DiffNames[d]
 }
 
+// InitialDifficulty 返回队伍在界面中的初始难度选项。
+func InitialDifficulty(t Team) int {
+	if d := DifficultyFromName(t.Name); d >= 0 {
+		return int(d)
+	}
+	if t.IsAI && t.Difficulty >= 0 && t.Difficulty < int32(len(DiffNames)) {
+		return int(t.Difficulty)
+	}
+	return 2
+}
+
 func DifficultyFromName(name string) int32 {
 	f := strings.FieldsFunc(name, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)

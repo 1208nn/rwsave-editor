@@ -207,7 +207,7 @@ func (a *app) load(p string) {
 			targets = append(targets, t.IsAI)
 			names = append(names, ui.MakeState(t.Name))
 			money = append(money, ui.MakeState(fmt.Sprint(t.Credits)))
-			diffs = append(diffs, ui.MakeState(initialDiff(t)))
+			diffs = append(diffs, ui.MakeState(core.InitialDifficulty(t)))
 		}
 	}
 	a.names, a.credits, a.diffs = names, money, diffs
@@ -240,18 +240,6 @@ func (a *app) autoFix() {
 	}
 	a.targets.Set(ts)
 	a.log.Set(fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「保存」", len(hits)))
-}
-
-// initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
-// 否则 AI 用存档里的值，人类默认「中等」。
-func initialDiff(t core.Team) int {
-	if d := core.DifficultyFromName(t.Name); d >= 0 {
-		return int(d)
-	}
-	if t.IsAI && t.Difficulty >= 0 && t.Difficulty < int32(len(core.DiffNames)) {
-		return int(t.Difficulty)
-	}
-	return 2
 }
 
 func (a *app) changes() (map[int]core.Change, error) {
@@ -368,10 +356,6 @@ func (a *app) applyDir() {
 	if modified == 0 {
 		a.dirLog.Set("所有存档都无需修复")
 	} else {
-		if modified == 0 {
-			a.dirLog.Set("所有存档都无需修复")
-		} else {
-			a.dirLog.Set(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
-		}
+		a.dirLog.Set(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
 	}
 }

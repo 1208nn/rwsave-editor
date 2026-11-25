@@ -16,8 +16,7 @@ import (
 
 // 表头与行共用列宽，保证对齐。
 const (
-	maxRows = 10
-	// 表头与行共用列宽，保证对齐。
+	maxRows                                   = 10
 	wSlot, wName, wDiff, wMoney, wAlly, wPick = 40, 240, 100, 100, 60, 110
 )
 
@@ -136,18 +135,6 @@ func (a *app) dirPath() string {
 	return strings.Trim(strings.TrimSpace(a.dir.Text()), `"`)
 }
 
-// initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
-// 否则 AI 用存档里的值，人类默认「中等」。
-func initialDiff(t core.Team) int {
-	if d := core.DifficultyFromName(t.Name); d >= 0 {
-		return int(d)
-	}
-	if t.IsAI && t.Difficulty >= 0 && t.Difficulty < int32(len(core.DiffNames)) {
-		return int(t.Difficulty)
-	}
-	return 2
-}
-
 func (a *app) browseFile() {
 	files := a.w.FileDialog(gowt.FileDialog{Title: "选择存档", Filters: []gowt.FileFilter{{Name: "铁锈战争存档", Pattern: "*.rwsave"}}})
 	if len(files) > 0 {
@@ -189,7 +176,7 @@ func (a *app) load(path string) {
 		r := &a.rows[n]
 		r.slot.SetText(fmt.Sprint(t.Slot))
 		r.name.SetText(t.Name)
-		r.diff.Select(int(initialDiff(t)))
+		r.diff.Select(core.InitialDifficulty(t))
 		r.credits.SetText(fmt.Sprint(t.Credits))
 		r.ally.SetText(fmt.Sprint(t.Ally))
 		if t.IsAI {
@@ -333,10 +320,6 @@ func (a *app) applyDir() {
 	if modified == 0 {
 		a.dirInfo.SetText("所有存档都无需修复")
 	} else {
-		if modified == 0 {
-			a.dirInfo.SetText("所有存档都无需修复")
-		} else {
-			a.dirInfo.SetText(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
-		}
+		a.dirInfo.SetText(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
 	}
 }

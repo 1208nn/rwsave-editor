@@ -225,7 +225,7 @@ func (a *app) load(path string) {
 		r.name.SetAttribute("VALUE", t.Name)
 		r.credits.SetAttribute("VALUE", fmt.Sprint(t.Credits))
 		r.ally.SetAttribute("ALIGNMENT", "ALEFT")
-		r.diff = diffDropdown(int(initialDiff(t)))
+		r.diff = diffDropdown(core.InitialDifficulty(t))
 		r.pick = iup.List()
 		r.pick.SetAttribute("1", "人类")
 		r.pick.SetAttribute("2", "AI")
@@ -376,24 +376,8 @@ func (a *app) applyDir() {
 	if modified == 0 {
 		a.dirInfo.SetAttribute("TITLE", "所有存档都无需修复")
 	} else {
-		if modified == 0 {
-			a.dirInfo.SetAttribute("TITLE", "所有存档都无需修复")
-		} else {
-			a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
-		}
+		a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
 	}
-}
-
-// initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
-// 否则 AI 用存档里的值，人类默认「中等」。
-func initialDiff(t core.Team) int {
-	if d := core.DifficultyFromName(t.Name); d >= 0 {
-		return int(d)
-	}
-	if t.IsAI && t.Difficulty >= 0 && t.Difficulty < int32(len(core.DiffNames)) {
-		return int(t.Difficulty)
-	}
-	return 2
 }
 
 // diffDropdown 建一个难度下拉框，VALUE 是 1 起始的选项序号。
