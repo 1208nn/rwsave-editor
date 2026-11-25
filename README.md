@@ -3,11 +3,11 @@
 把 `.rwsave` 里被存成「人类」的人机改回真正的 AI，读档后 AI 才会行动。
 同一份逻辑做了三个界面版本，用来挑手感：
 
-| 版本                       | 可执行文件                  | 体积    |
-| -------------------------- | --------------------------- | ------- |
-| IUP（原生 Win32 控件）     | `dist/iup/rwsave-iup.exe`   | 3.7 MB  |
-| GOUI（自绘 Material 风格） | `dist/goui/rwsave-goui.exe` | 8.0 MB  |
-| gowt（SWT 移植，原生控件） | `dist/gowt/rwsave-gowt.exe` | 11.5 MB |
+| 版本                       | 可执行文件                  |
+| -------------------------- | --------------------------- |
+| IUP（原生 Win32 控件）     | `dist/iup/rwsave-iup.exe`   |
+| GOUI（自绘 Material 风格） | `dist/goui/rwsave-goui.exe` |
+| gowt（SWT 移植，原生控件） | `dist/gowt/rwsave-gowt.exe` |
 
 三者功能完全一致，都编译成单文件、无需安装运行时。
 把 `.rwsave` 直接拖到 exe 上（或把路径作为第一个参数）即可自动打开。
@@ -18,10 +18,10 @@
 
 **单个存档**
 
-1. 粘贴存档路径（或点「浏览…」）→「读取」。
-2. 每行一个队伍：名字、存档里记录的类型、右侧下拉框（人类/AI）。
+1. 粘贴存档路径（或点「…」浏览）。
+2. 每行一个队伍：名字、资金、右侧下拉框（人类/AI）。
 3. 「一键自动修复」：把名字像 `AI - Very Hard` 却存成人类的队伍全部改成 AI。
-4. 「写回存档」：弹确认框列出改动 → 确认后先存 `.rwsave.bak` 再写回。
+4. 「写回存档」：先存 `.rwsave.bak` 再写回，改完自动重新读取。
 
 **批量修复目录**
 
@@ -31,7 +31,6 @@
 
 - 名字形如 `AI`、`AI - xxx`、`AI-xxx` 视为人机。
 - 已经是真实 AI（带基地/作战小组数据）的队伍不会被降级：把这类数据从存档里剥离会损坏存档。
-- 改回人类后，游戏读档会创建一个不会行动的普通队伍——这正是「人机不动」的成因。
 
 ## 原理
 
@@ -56,7 +55,6 @@ ui-gowt/     gowt 界面
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H=windowsgui" -o dist/iup/rwsave-iup.exe  ./ui-iup
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H=windowsgui" -o dist/goui/rwsave-goui.exe ./ui-goui
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H=windowsgui" -o dist/gowt/rwsave-gowt.exe ./ui-gowt
-go test ./core
 ```
 
-`core` 的测试包含一个关键保证：把队伍改成 AI 再改回人类，结果必须与原始存档逐字节相同。
+交叉编译 Linux：`GOOS=linux GOARCH=amd64 go build ...`（同样不需要 gcc）。
