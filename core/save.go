@@ -51,6 +51,17 @@ func LooksLikeAI(name string) bool {
 	return n == "ai" || strings.HasPrefix(n, "ai ") || strings.HasPrefix(n, "ai-") || strings.HasPrefix(n, "ai_")
 }
 
+// DiffNames 是 aiDifficulty 0-5 对应的中文显示名。
+var DiffNames = [...]string{"非常简单", "简单", "中等", "困难", "非常困难", "炼狱"}
+
+// DiffName 返回难度显示名，越界返回空串。
+func DiffName(d int32) string {
+	if d < 0 || int(d) >= len(DiffNames) {
+		return ""
+	}
+	return DiffNames[d]
+}
+
 func DifficultyFromName(name string) int32 {
 	f := strings.FieldsFunc(name, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
@@ -479,9 +490,10 @@ func f32(v float32) []byte { return i32(int32(math.Float32bits(v))) }
 
 // Change 描述一个队伍槽位的可写字段。
 type Change struct {
-	IsAI    *bool
-	Name    *string
-	Credits *int32
+	IsAI       *bool
+	Name       *string
+	Credits    *int32
+	Difficulty *int32
 }
 
 // ApplyChanges 按槽位修改队伍类型、名称和资金。
@@ -504,11 +516,6 @@ func (s *Save) ApplyChanges(changes map[int]Change) ([]byte, []string, error) {
 				flag = 1
 				edits = append(edits, edit{at: t.stateStart, insert: canonicalAI(t.Slot)})
 				logs = append(logs, t.Name+"：人类 → AI")
-				// 队名带难度词（如 "AI - Very Hard"）时，把难度一并写进队伍记录。
-				if d := DifficultyFromName(t.Name); d >= 0 {
-					at := t.recStart + 12 + 3 + modifiedUTFLen(t.Name) + 14 // 名字后的 PENDING/ping/lastPingTime/isAI 之后
-					edits = append(edits, edit{at: at, remove: 4, insert: i32(d)})
-				}
 			} else {
 				edits = append(edits, edit{at: t.stateStart - t.aiStateLen, remove: t.aiStateLen})
 				logs = append(logs, t.Name+"：AI → 人类")
@@ -521,6 +528,21 @@ func (s *Save) ApplyChanges(changes map[int]Change) ([]byte, []string, error) {
 				edit{at: t.recStart, remove: 1, insert: []byte{flag}},
 				edit{at: t.recStart + 1, remove: 1, insert: []byte{stdFlag}},
 			)
+		}
+		// 难度：优先用调用方给的值，否则转 AI 时从队名推断（如 "AI - Very Hard"）。
+		setDiff := func(d int32) {
+			at := t.recStart + 12 + 3 + modifiedUTFLen(t.Name) + 14 // 名字后的 PENDING/ping/lastPingTime/isAI 之后
+			edits = append(edits, edit{at: at, remove: 4, insert: i32(d)})
+			logs = append(logs, fmt.Sprintf("%s：难度 → %s", t.Name, DiffName(d)))
+		}
+		if c.Difficulty != nil {
+			if d := *c.Difficulty; d != t.Difficulty {
+				setDiff(d)
+			}
+		} else if c.IsAI != nil && *c.IsAI && !t.IsAI {
+			if d := DifficultyFromName(t.Name); d >= 0 && d != t.Difficulty {
+				setDiff(d)
+			}
 		}
 		if c.Credits != nil && *c.Credits != t.Credits {
 			v := i32(*c.Credits)
@@ -606,6 +628,9 @@ func (s *Save) verifyChanges(data []byte, changes map[int]Change) error {
 		}
 		if c.Credits != nil && t.Credits != *c.Credits {
 			return fmt.Errorf("队伍 %d 的资金未生效", t.Slot)
+		}
+		if c.Difficulty != nil && t.Difficulty != *c.Difficulty {
+			return fmt.Errorf("队伍 %d 的难度未生效", t.Slot)
 		}
 	}
 	return nil

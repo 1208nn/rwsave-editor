@@ -23,6 +23,11 @@ import (
 
 var kinds = gui.NewSliceListModel([]widgets.DropDownItem{{Text: "人类"}, {Text: "AI"}})
 
+var diffKinds = gui.NewSliceListModel([]widgets.DropDownItem{
+	{Text: core.DiffNames[0]}, {Text: core.DiffNames[1]}, {Text: core.DiffNames[2]},
+	{Text: core.DiffNames[3]}, {Text: core.DiffNames[4]}, {Text: core.DiffNames[5]},
+})
+
 // 名称列固定宽度，表头与输入框同宽才能对齐。
 const nameWidth = 260
 
@@ -45,6 +50,7 @@ type app struct {
 	dirLog  ui.State[string]
 	names   []ui.State[string]
 	credits []ui.State[string]
+	diffs   []ui.State[int]
 }
 
 func main() {
@@ -109,7 +115,7 @@ func (a *app) rowsView() ui.View {
 	head := ui.HBox(
 		ui.Label("槽位").MinWidth(35).MaxWidth(35),
 		ui.Label("玩家名称").MinWidth(nameWidth).MaxWidth(nameWidth),
-		ui.Label("难度").MinWidth(60).MaxWidth(60),
+		ui.Label("难度").MinWidth(100).MaxWidth(100),
 		ui.Label("资金").MinWidth(90).MaxWidth(90),
 		ui.Label("阵营").MinWidth(45).MaxWidth(45),
 		ui.Label("控制").MinWidth(110).MaxWidth(110),
@@ -132,7 +138,8 @@ func (a *app) rowsView() ui.View {
 		rows = append(rows, ui.HBox(
 			ui.Label(fmt.Sprint(t.Slot)).MinWidth(35).MaxWidth(35),
 			ui.TextInput().BindText(&a.names[idx]).MinWidth(nameWidth).MaxWidth(nameWidth),
-			ui.Label(diffText(t)).MinWidth(60).MaxWidth(60),
+			wui.DropDown(diffKinds).Selected(a.diffs[idx].Get()).MinWidth(100).MaxWidth(100).
+				OnSelected(func(v int) { a.diffs[idx].Set(v) }),
 			ui.TextInput().BindText(&a.credits[idx]).MinWidth(90).MaxWidth(90),
 			ui.Label(fmt.Sprint(t.Ally)).MinWidth(45).MaxWidth(45),
 			wui.DropDown(kinds).Selected(sel).MinWidth(110).MaxWidth(110).
@@ -142,15 +149,6 @@ func (a *app) rowsView() ui.View {
 		i++
 	}
 	return ui.VBox(rows...).Spacing(6).CrossAlign(layout.CrossStretch)
-}
-
-var diffNames = [...]string{"非常简单", "简单", "中等", "困难", "非常困难", "炼狱"}
-
-func diffText(t core.Team) string {
-	if !t.IsAI || t.Difficulty < 0 || int(t.Difficulty) >= len(diffNames) {
-		return ""
-	}
-	return diffNames[t.Difficulty]
 }
 
 func (a *app) setTarget(i int, isAI bool) {
@@ -203,14 +201,16 @@ func (a *app) load(p string) {
 	targets := make([]bool, 0, len(s.Teams))
 	names := make([]ui.State[string], 0, len(s.Teams))
 	money := make([]ui.State[string], 0, len(s.Teams))
+	diffs := make([]ui.State[int], 0, len(s.Teams))
 	for _, t := range s.Teams {
 		if t.Present {
 			targets = append(targets, t.IsAI)
 			names = append(names, ui.MakeState(t.Name))
 			money = append(money, ui.MakeState(fmt.Sprint(t.Credits)))
+			diffs = append(diffs, ui.MakeState(initialDiff(t)))
 		}
 	}
-	a.names, a.credits = names, money
+	a.names, a.credits, a.diffs = names, money, diffs
 	a.targets.Set(targets)
 	a.dir.Set(filepath.Dir(p))
 	a.save.Set(s)
@@ -242,6 +242,18 @@ func (a *app) autoFix() {
 	a.log.Set(fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「保存」", len(hits)))
 }
 
+// initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
+// 否则 AI 用存档里的值，人类默认「中等」。
+func initialDiff(t core.Team) int {
+	if d := core.DifficultyFromName(t.Name); d >= 0 {
+		return int(d)
+	}
+	if t.IsAI && t.Difficulty >= 0 && t.Difficulty < int32(len(core.DiffNames)) {
+		return int(t.Difficulty)
+	}
+	return 2
+}
+
 func (a *app) changes() (map[int]core.Change, error) {
 	s := a.save.Get()
 	if s == nil {
@@ -259,7 +271,12 @@ func (a *app) changes() (map[int]core.Change, error) {
 		}
 		name := a.names[i].Get()
 		credits, isAI := int32(money), a.targets.Get()[i]
-		changes[t.Slot] = core.Change{Name: &name, Credits: &credits, IsAI: &isAI}
+		c := core.Change{Name: &name, Credits: &credits, IsAI: &isAI}
+		if isAI || t.IsAI {
+			d := int32(a.diffs[i].Get())
+			c.Difficulty = &d
+		}
+		changes[t.Slot] = c
 		i++
 	}
 	return changes, nil

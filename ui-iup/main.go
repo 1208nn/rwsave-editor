@@ -15,7 +15,7 @@ import (
 
 // 表头与行共用列宽规则，保证对齐。宽度 0 表示自适应，高度统一 22。
 var columns = []struct{ title, width string }{
-	{"槽位", "40x22"}, {"玩家名称", "0x22"}, {"难度", "65x22"},
+	{"槽位", "40x22"}, {"玩家名称", "0x22"}, {"难度", "100x22"},
 	{"资金", "90x22"}, {"阵营", "50x22"}, {"控制", "90x22"},
 }
 
@@ -220,11 +220,11 @@ func (a *app) load(path string) {
 		}
 		r := &row{slot: t.Slot}
 		r.slotLabel = iup.Label(fmt.Sprint(t.Slot))
-		r.name, r.diff, r.credits, r.ally = iup.Text(), iup.Label(diffText(t)), iup.Text(), iup.Label(fmt.Sprint(t.Ally))
+		r.name, r.credits, r.ally = iup.Text(), iup.Text(), iup.Label(fmt.Sprint(t.Ally))
 		r.name.SetAttribute("VALUE", t.Name)
 		r.credits.SetAttribute("VALUE", fmt.Sprint(t.Credits))
-		r.diff.SetAttribute("ALIGNMENT", "ALEFT")
 		r.ally.SetAttribute("ALIGNMENT", "ALEFT")
+		r.diff = diffDropdown(int(initialDiff(t)))
 		r.pick = iup.List()
 		r.pick.SetAttribute("1", "人类")
 		r.pick.SetAttribute("2", "AI")
@@ -297,7 +297,14 @@ func (a *app) write() {
 			return
 		}
 		isAI, credits := r.pick.GetAttribute("VALUE") == "2", int32(credit)
-		changes[r.slot] = core.Change{Name: &name, Credits: &credits, IsAI: &isAI}
+		c := core.Change{Name: &name, Credits: &credits, IsAI: &isAI}
+		if isAI || original.IsAI {
+			d, _ := strconv.Atoi(r.diff.GetAttribute("VALUE"))
+			v := int32(d - 1)
+			c.Difficulty = &v
+			changed = changed || v != original.Difficulty
+		}
+		changes[r.slot] = c
 		changed = changed || name != original.Name || credits != original.Credits || isAI != original.IsAI
 	}
 	if !changed {
@@ -354,13 +361,27 @@ func (a *app) fixDir() {
 	a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
 }
 
-var diffNames = [...]string{"非常简单", "简单", "中等", "困难", "非常困难", "炼狱"}
-
-func diffText(t core.Team) string {
-	if !t.IsAI || t.Difficulty < 0 || int(t.Difficulty) >= len(diffNames) {
-		return ""
+// initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
+// 否则 AI 用存档里的值，人类默认「中等」。
+func initialDiff(t core.Team) int {
+	if d := core.DifficultyFromName(t.Name); d >= 0 {
+		return int(d)
 	}
-	return diffNames[t.Difficulty]
+	if t.IsAI && t.Difficulty >= 0 && t.Difficulty < int32(len(core.DiffNames)) {
+		return int(t.Difficulty)
+	}
+	return 2
+}
+
+// diffDropdown 建一个难度下拉框，VALUE 是 1 起始的选项序号。
+func diffDropdown(sel int) iup.Ihandle {
+	d := iup.List()
+	d.SetAttribute("DROPDOWN", "YES")
+	for i, n := range core.DiffNames {
+		d.SetAttribute(strconv.Itoa(i+1), n)
+	}
+	d.SetAttribute("VALUE", strconv.Itoa(sel+1))
+	return d
 }
 
 func pickValue(isAI bool) string {

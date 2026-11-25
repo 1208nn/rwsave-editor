@@ -14,16 +14,20 @@ import (
 	"rwsave-editor/core"
 )
 
+// 表头与行共用列宽，保证对齐。
 const (
 	maxRows = 10
 	// 表头与行共用列宽，保证对齐。
-	wSlot, wName, wDiff, wMoney, wAlly, wPick = 40, 240, 70, 100, 60, 110
+	wSlot, wName, wDiff, wMoney, wAlly, wPick = 40, 240, 100, 100, 60, 110
 )
+
+var diffItems = []string{core.DiffNames[0], core.DiffNames[1], core.DiffNames[2],
+	core.DiffNames[3], core.DiffNames[4], core.DiffNames[5]}
 
 type row struct {
 	slot    *gowt.LabelView
 	name    *gowt.TextView
-	diff    *gowt.LabelView
+	diff    *gowt.ComboView
 	credits *gowt.TextView
 	ally    *gowt.LabelView
 	pick    *gowt.ComboView
@@ -86,7 +90,7 @@ func (a *app) buildRows() {
 		a.scroll.Add(gowt.HBox(gowt.GrowX(),
 			gowt.Label("", gowt.Ref(&r.slot), gowt.Size(wSlot, 0)),
 			gowt.Text(gowt.Ref(&r.name), gowt.Size(wName, 0), gowt.GrowX()),
-			gowt.Label("", gowt.Ref(&r.diff), gowt.Size(wDiff, 0)),
+			gowt.Combo(diffItems, gowt.Ref(&r.diff), gowt.Size(wDiff, 0)),
 			gowt.Text(gowt.Ref(&r.credits), gowt.Size(wMoney, 0)),
 			gowt.Label("", gowt.Ref(&r.ally), gowt.Size(wAlly, 0)),
 			gowt.Combo([]string{"人类", "AI"}, gowt.Ref(&r.pick), gowt.Size(wPick, 0)),
@@ -127,13 +131,16 @@ func (a *app) dirTab() []gowt.Option {
 	}
 }
 
-var diffNames = [...]string{"非常简单", "简单", "中等", "困难", "非常困难", "炼狱"}
-
-func diffText(t core.Team) string {
-	if !t.IsAI || t.Difficulty < 0 || int(t.Difficulty) >= len(diffNames) {
-		return ""
+// initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
+// 否则 AI 用存档里的值，人类默认「中等」。
+func initialDiff(t core.Team) int {
+	if d := core.DifficultyFromName(t.Name); d >= 0 {
+		return int(d)
 	}
-	return diffNames[t.Difficulty]
+	if t.IsAI && t.Difficulty >= 0 && t.Difficulty < int32(len(core.DiffNames)) {
+		return int(t.Difficulty)
+	}
+	return 2
 }
 
 func (a *app) browseFile() {
@@ -177,7 +184,7 @@ func (a *app) load(path string) {
 		r := &a.rows[n]
 		r.slot.SetText(fmt.Sprint(t.Slot))
 		r.name.SetText(t.Name)
-		r.diff.SetText(diffText(t))
+		r.diff.Select(int(initialDiff(t)))
 		r.credits.SetText(fmt.Sprint(t.Credits))
 		r.ally.SetText(fmt.Sprint(t.Ally))
 		if t.IsAI {
@@ -196,7 +203,6 @@ func (a *app) load(path string) {
 		if !show {
 			r.slot.SetText("")
 			r.name.SetText("")
-			r.diff.SetText("")
 			r.credits.SetText("")
 			r.ally.SetText("")
 		}
@@ -250,7 +256,13 @@ func (a *app) write() {
 			return
 		}
 		isAI, credits := a.rows[i].pick.Index() == 1, int32(money)
-		changes[t.Slot] = core.Change{Name: &name, Credits: &credits, IsAI: &isAI}
+		c := core.Change{Name: &name, Credits: &credits, IsAI: &isAI}
+		if isAI || t.IsAI {
+			d := int32(a.rows[i].diff.Index())
+			c.Difficulty = &d
+			changed = changed || d != t.Difficulty
+		}
+		changes[t.Slot] = c
 		changed = changed || name != t.Name || credits != t.Credits || isAI != t.IsAI
 		i++
 	}
