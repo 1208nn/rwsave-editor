@@ -1,0 +1,374 @@
+// 铁锈战争存档 AI 编辑器 —— IUP 版
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/gen2brain/iup-go/iup"
+
+	"rwsave-editor/core"
+)
+
+// 表头与行共用列宽规则，保证对齐。名称列弹性伸缩，其余固定。
+var columns = []struct{ title, width string }{
+	{"槽位", "40x22"}, {"玩家名称", ""}, {"难度", "65x22"},
+	{"资金", "90x22"}, {"阵营", "50x22"}, {"控制", "90x22"},
+}
+
+type row struct {
+	slot      int
+	box       iup.Ihandle
+	slotLabel iup.Ihandle
+	name      iup.Ihandle
+	diff      iup.Ihandle
+	credits   iup.Ihandle
+	ally      iup.Ihandle
+	pick      iup.Ihandle
+}
+
+type app struct {
+	save *core.Save
+	path string
+
+	pathEdit    iup.Ihandle
+	info        iup.Ihandle
+	tab         iup.Ihandle
+	anchor      iup.Ihandle
+	list        iup.Ihandle // 表头 + 队伍行
+	placeholder iup.Ihandle
+	rows        []*row
+
+	dir     string
+	dirEdit iup.Ihandle
+	dirInfo iup.Ihandle
+}
+
+func main() {
+	iup.Open()
+	defer iup.Close()
+	iup.SetGlobal("UTF8MODE", "YES")
+	iup.SetGlobal("UTF8MODE_FILE", "YES")
+
+	a := &app{}
+	tabs := iup.Tabs(a.singleTab(), a.dirTab())
+	// 页签控件本身必须跟着对话框伸缩，否则页面和滚动区都会卡在初始尺寸。
+	tabs.SetAttribute("EXPAND", "YES")
+	dlg := iup.Dialog(tabs)
+	dlg.SetAttribute("TITLE", "铁锈战争 存档 AI 编辑器（IUP）")
+	dlg.SetAttribute("MARGIN", "8x8")
+	dlg.SetAttribute("RASTERSIZE", "600x340")
+	dlg.SetAttribute("MINSIZE", "380x300")
+
+	iup.Show(dlg)
+	if len(os.Args) > 1 {
+		a.load(os.Args[1])
+	}
+	iup.MainLoop()
+}
+
+func (a *app) singleTab() iup.Ihandle {
+	a.info = iup.Label("")
+
+	a.placeholder = iup.Label("尚未读取存档")
+
+	var header []iup.Ihandle
+	for _, c := range columns {
+		l := iup.Label(c.title)
+		l.SetAttribute("ALIGNMENT", "ALEFT")
+		if c.width == "" {
+			l.SetAttribute("EXPAND", "HORIZONTAL")
+		} else {
+			l.SetAttribute("RASTERSIZE", c.width)
+		}
+		header = append(header, l)
+	}
+	headRow := iup.Hbox(header...)
+	headRow.SetAttribute("EXPAND", "HORIZONTAL")
+
+	a.list = iup.Vbox(headRow, a.placeholder)
+	a.list.SetAttribute("GAP", "2")
+
+	// 原生滚动容器：窗口小就出滚动条，窗口大就全部显示，行本身不伸缩。
+	scroll := iup.ScrollBox(a.list)
+	scroll.SetAttribute("EXPAND", "YES")
+
+	a.anchor = iup.Hbox(
+		iup.On(iup.Button("一键自动修复"), iup.ActionCB, func(iup.Ihandle) int { a.autoFix(); return iup.DEFAULT }),
+		iup.On(iup.Button("写回存档"), iup.ActionCB, func(iup.Ihandle) int { a.write(); return iup.DEFAULT }),
+	)
+	a.anchor.SetAttribute("GAP", "6")
+	a.anchor.SetAttribute("EXPAND", "HORIZONTAL")
+
+	a.pathEdit = iup.Text()
+	a.pathEdit.SetAttribute("EXPAND", "HORIZONTAL")
+	a.pathEdit.SetCallback("K_ANY", iup.KAnyFunc(func(_ iup.Ihandle, c int) int {
+		if c == iup.K_CR {
+			a.load(a.pathEdit.GetAttribute("VALUE"))
+		}
+		return iup.DEFAULT
+	}))
+
+	pathRow := iup.Hbox(
+		a.pathEdit,
+		iup.On(iup.Button("…"), iup.ActionCB, func(iup.Ihandle) int { a.pickFile(); return iup.DEFAULT }),
+	)
+	pathRow.SetAttribute("EXPAND", "HORIZONTAL")
+	pathRow.SetAttribute("ALIGNMENT", "ACENTER")
+	pathRow.SetAttribute("GAP", "6")
+
+	a.tab = iup.Vbox(
+		pathRow,
+		scroll,
+		a.info,
+		a.anchor,
+	)
+	a.tab.SetAttribute("GAP", "6")
+	a.tab.SetAttribute("EXPAND", "YES")
+	a.tab.SetAttribute("TABTITLE", "单个存档")
+	return a.tab
+}
+
+func (a *app) dirTab() iup.Ihandle {
+	a.dirInfo = iup.Label("")
+	a.dirEdit = iup.Text()
+	a.dirEdit.SetAttribute("EXPAND", "HORIZONTAL")
+
+	dirRow := iup.Hbox(
+		a.dirEdit,
+		iup.On(iup.Button("…"), iup.ActionCB, func(iup.Ihandle) int { a.pickDir(); return iup.DEFAULT }),
+		iup.On(iup.Button("一键修复此目录"), iup.ActionCB, func(iup.Ihandle) int { a.fixDir(); return iup.DEFAULT }),
+	)
+	dirRow.SetAttribute("EXPAND", "HORIZONTAL")
+	dirRow.SetAttribute("GAP", "6")
+
+	tab := iup.Vbox(
+		dirRow,
+		a.dirInfo,
+	)
+	tab.SetAttribute("GAP", "6")
+	tab.SetAttribute("EXPAND", "YES")
+	tab.SetAttribute("TABTITLE", "批量修复目录")
+	return tab
+}
+
+func (a *app) pickFile() {
+	d := iup.FileDlg()
+	d.SetAttribute("DIALOGTYPE", "OPEN")
+	d.SetAttribute("TITLE", "选择存档")
+	d.SetAttribute("EXTFILTER", "铁锈战争存档|*.rwsave|所有文件|*.*|")
+	iup.Popup(d, iup.CENTER, iup.CENTER)
+	p := d.GetAttribute("VALUE")
+	iup.Destroy(d)
+	if p != "" {
+		a.load(p)
+	}
+}
+
+func (a *app) pickDir() {
+	d := iup.FileDlg()
+	d.SetAttribute("DIALOGTYPE", "DIR")
+	d.SetAttribute("TITLE", "选择存档目录")
+	d.SetAttribute("DIRECTORY", a.dir)
+	iup.Popup(d, iup.CENTER, iup.CENTER)
+	p := d.GetAttribute("VALUE")
+	iup.Destroy(d)
+	if p == "" {
+		return
+	}
+	a.dir = strings.TrimRight(p, `\/`)
+	a.dirEdit.SetAttribute("VALUE", a.dir)
+}
+
+func (a *app) load(path string) {
+	path = strings.Trim(strings.TrimSpace(path), `"`)
+	if path == "" {
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		iup.Message("读取失败", "路径："+path+"\n\n"+err.Error())
+		a.info.SetAttribute("TITLE", "读取失败："+err.Error())
+		return
+	}
+	s, err := core.Load(data)
+	if err != nil {
+		iup.Message("解析失败", "文件："+path+"\n\n"+err.Error())
+		a.info.SetAttribute("TITLE", "解析失败："+err.Error())
+		return
+	}
+	a.save, a.path = s, path
+
+	for _, r := range a.rows {
+		iup.Destroy(r.box)
+	}
+	a.rows = nil
+	if a.placeholder != 0 {
+		iup.Destroy(a.placeholder)
+		a.placeholder = 0
+	}
+	for _, t := range s.Teams {
+		if !t.Present {
+			continue
+		}
+		r := &row{slot: t.Slot}
+		r.slotLabel = iup.Label(fmt.Sprint(t.Slot))
+		r.name, r.diff, r.credits, r.ally = iup.Text(), iup.Label(diffText(t)), iup.Text(), iup.Label(fmt.Sprint(t.Ally))
+		r.name.SetAttribute("VALUE", t.Name)
+		r.credits.SetAttribute("VALUE", fmt.Sprint(t.Credits))
+		r.diff.SetAttribute("ALIGNMENT", "ALEFT")
+		r.ally.SetAttribute("ALIGNMENT", "ALEFT")
+		r.pick = iup.List()
+		r.pick.SetAttribute("1", "人类")
+		r.pick.SetAttribute("2", "AI")
+		r.pick.SetAttribute("DROPDOWN", "YES")
+		r.pick.SetAttribute("VALUE", pickValue(t.IsAI))
+		for i, h := range []iup.Ihandle{r.slotLabel, r.name, r.diff, r.credits, r.ally, r.pick} {
+			if columns[i].width == "" {
+				h.SetAttribute("EXPAND", "HORIZONTAL")
+			} else {
+				h.SetAttribute("RASTERSIZE", columns[i].width)
+			}
+		}
+		r.box = iup.Hbox(r.slotLabel, r.name, r.diff, r.credits, r.ally, r.pick)
+		r.box.SetAttribute("ALIGNMENT", "ACENTER")
+		r.box.SetAttribute("EXPAND", "HORIZONTAL")
+		iup.Append(a.list, r.box)
+		iup.Map(r.box)
+		a.rows = append(a.rows, r)
+	}
+	if len(a.rows) == 0 {
+		a.placeholder = iup.Label("这个存档里没有队伍")
+		iup.Append(a.list, a.placeholder)
+		iup.Map(a.placeholder)
+	}
+	iup.Refresh(a.tab)
+	a.info.SetAttribute("TITLE", fmt.Sprintf("%s —— %d 个队伍", filepath.Base(path), len(a.rows)))
+	a.pathEdit.SetAttribute("VALUE", path)
+	a.dir = filepath.Dir(path)
+	a.dirEdit.SetAttribute("VALUE", a.dir)
+}
+
+func (a *app) teams() []core.Team {
+	var out []core.Team
+	for _, t := range a.save.Teams {
+		if t.Present {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func (a *app) autoFix() {
+	if a.save == nil {
+		a.info.SetAttribute("TITLE", "请先读取存档")
+		return
+	}
+	hits := a.save.AutoTargets()
+	if len(hits) == 0 {
+		a.info.SetAttribute("TITLE", "没有需要自动修复的队伍")
+		return
+	}
+	for i, t := range a.teams() {
+		if hits[t.Slot] {
+			a.rows[i].pick.SetAttribute("VALUE", "2")
+		}
+	}
+	a.info.SetAttribute("TITLE", fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「写回存档」", len(hits)))
+}
+
+func (a *app) write() {
+	if a.save == nil {
+		a.info.SetAttribute("TITLE", "请先读取存档")
+		return
+	}
+	changes := make(map[int]core.Change, len(a.rows))
+	changed := false
+	for _, r := range a.rows {
+		var original core.Team
+		for _, t := range a.save.Teams {
+			if t.Present && t.Slot == r.slot {
+				original = t
+				break
+			}
+		}
+		name := r.name.GetAttribute("VALUE")
+		credit, err := strconv.ParseInt(strings.TrimSpace(r.credits.GetAttribute("VALUE")), 10, 32)
+		if err != nil {
+			iup.Message("资金无效", "槽位 "+strconv.Itoa(r.slot)+" 的资金必须是 32 位整数。")
+			return
+		}
+		isAI, credits := r.pick.GetAttribute("VALUE") == "2", int32(credit)
+		changes[r.slot] = core.Change{Name: &name, Credits: &credits, IsAI: &isAI}
+		changed = changed || name != original.Name || credits != original.Credits || isAI != original.IsAI
+	}
+	if !changed {
+		a.info.SetAttribute("TITLE", "没有需要修改的内容")
+		return
+	}
+	out, _, err := a.save.ApplyChanges(changes)
+	if err != nil {
+		iup.Message("写回失败", err.Error())
+		return
+	}
+	bak, err := core.WriteWithBackup(a.path, out)
+	if err != nil {
+		iup.Message("写回失败", err.Error())
+		return
+	}
+	a.load(a.path)
+	a.info.SetAttribute("TITLE", "已写回；备份："+bak)
+}
+
+func (a *app) fixDir() {
+	dir := strings.Trim(strings.TrimSpace(a.dirEdit.GetAttribute("VALUE")), `"`)
+	if dir == "" {
+		a.dirInfo.SetAttribute("TITLE", "请先选择目录")
+		return
+	}
+	a.dir = strings.TrimRight(dir, `\/`)
+	preview, err := core.FixDir(dir, true)
+	if err != nil {
+		a.dirInfo.SetAttribute("TITLE", "读取目录失败："+err.Error())
+		return
+	}
+	n := 0
+	for _, r := range preview {
+		if r.Status == "可修复" {
+			n++
+		}
+	}
+	if n == 0 {
+		a.dirInfo.SetAttribute("TITLE", "没有需要修复的存档")
+		return
+	}
+	results, err := core.FixDir(dir, false)
+	if err != nil {
+		a.dirInfo.SetAttribute("TITLE", "修复失败："+err.Error())
+		return
+	}
+	modified := 0
+	for _, r := range results {
+		if r.Status == "已修复" {
+			modified++
+		}
+	}
+	a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
+}
+
+func diffText(t core.Team) string {
+	if !t.IsAI {
+		return ""
+	}
+	return fmt.Sprint(t.Difficulty)
+}
+
+func pickValue(isAI bool) string {
+	if isAI {
+		return "2"
+	}
+	return "1"
+}
