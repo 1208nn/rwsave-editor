@@ -51,7 +51,12 @@ func FixFile(path string, dry bool) FileResult {
 		res.Status = "无需修改"
 		return res
 	}
-	out, logs, err := s.Apply(targets)
+	changes := make(map[int]Change, len(targets))
+	for slot := range targets {
+		v := true
+		changes[slot] = Change{IsAI: &v}
+	}
+	out, logs, err := s.ApplyChanges(changes)
 	if err != nil {
 		res.Status, res.Log = "部分失败", append(logs, err.Error())
 		return res

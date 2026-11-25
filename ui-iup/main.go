@@ -287,14 +287,9 @@ func (a *app) write() {
 	}
 	changes := make(map[int]core.Change, len(a.rows))
 	changed := false
-	for _, r := range a.rows {
-		var original core.Team
-		for _, t := range a.save.Teams {
-			if t.Present && t.Slot == r.slot {
-				original = t
-				break
-			}
-		}
+	present := a.teams()
+	for i, r := range a.rows {
+		original := present[i]
 		name := r.name.GetAttribute("VALUE")
 		credit, err := strconv.ParseInt(strings.TrimSpace(r.credits.GetAttribute("VALUE")), 10, 32)
 		if err != nil {

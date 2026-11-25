@@ -91,12 +91,9 @@ func (a *app) buildRows() {
 			gowt.Label("", gowt.Ref(&r.ally), gowt.Size(wAlly, 0)),
 			gowt.Combo([]string{"人类", "AI"}, gowt.Ref(&r.pick), gowt.Size(wPick, 0)),
 		))
-		r.slot.SetVisible(false)
-		r.name.SetVisible(false)
-		r.diff.SetVisible(false)
-		r.credits.SetVisible(false)
-		r.ally.SetVisible(false)
-		r.pick.SetVisible(false)
+		for _, w := range []gowt.Widget{r.slot, r.name, r.diff, r.credits, r.ally, r.pick} {
+			w.SetVisible(false)
+		}
 	}
 }
 
@@ -189,20 +186,19 @@ func (a *app) load(path string) {
 		n++
 	}
 	for i := n; i < maxRows; i++ {
-		a.rows[i].slot.SetText("")
-		a.rows[i].name.SetText("")
-		a.rows[i].diff.SetText("")
-		a.rows[i].credits.SetText("")
-		a.rows[i].ally.SetText("")
+		r := &a.rows[i]
+		r.slot.SetText("")
+		r.name.SetText("")
+		r.diff.SetText("")
+		r.credits.SetText("")
+		r.ally.SetText("")
 	}
 	for i := 0; i < maxRows; i++ {
+		r := &a.rows[i]
 		show := i < n
-		a.rows[i].slot.SetVisible(show)
-		a.rows[i].name.SetVisible(show)
-		a.rows[i].diff.SetVisible(show)
-		a.rows[i].credits.SetVisible(show)
-		a.rows[i].ally.SetVisible(show)
-		a.rows[i].pick.SetVisible(show)
+		for _, w := range []gowt.Widget{r.slot, r.name, r.diff, r.credits, r.ally, r.pick} {
+			w.SetVisible(show)
+		}
 	}
 	a.scroll.Fit()
 	a.info.SetText(fmt.Sprintf("%s —— %d 个队伍", filepath.Base(path), n))
@@ -232,22 +228,6 @@ func (a *app) autoFix() {
 		i++
 	}
 	a.status.SetText(fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「写回存档」", len(hits)))
-}
-
-func (a *app) desired() map[int]bool {
-	out := map[int]bool{}
-	if a.save == nil {
-		return out
-	}
-	i := 0
-	for _, t := range a.save.Teams {
-		if !t.Present {
-			continue
-		}
-		out[t.Slot] = a.rows[i].pick.Index() == 1
-		i++
-	}
-	return out
 }
 
 func (a *app) write() {

@@ -153,9 +153,7 @@ func diffText(t core.Team) string {
 
 func (a *app) setTarget(i int, isAI bool) {
 	ts := append([]bool(nil), a.targets.Get()...)
-	if i >= 0 && i < len(ts) {
-		ts[i] = isAI
-	}
+	ts[i] = isAI
 	a.targets.Set(ts)
 }
 

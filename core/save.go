@@ -44,17 +44,6 @@ type Team struct {
 // CanSetHuman 说明能否安全改回人类：真实 AI 运行数据无法在不破坏存档的前提下剥离。
 func (t Team) CanSetHuman() bool { return !t.IsAI || t.aiStateLen > 0 }
 
-// Kind 返回给界面显示的队伍类型。
-func (t Team) Kind() string {
-	switch {
-	case t.IsAI:
-		return "AI"
-	case t.IsStd:
-		return "联机玩家"
-	}
-	return "人类"
-}
-
 // LooksLikeAI 判断队伍名是否像游戏自带的人机，例如 "AI - Very Hard"。
 func LooksLikeAI(name string) bool {
 	n := strings.ToLower(strings.TrimSpace(name))
@@ -68,23 +57,6 @@ func (s *Save) AutoTargets() map[int]bool {
 		if t.Present && !t.IsAI && LooksLikeAI(t.Name) {
 			out[t.Slot] = true
 		}
-	}
-	return out
-}
-
-// Pending 列出与当前存档相比将要发生的改动，用于写回前的确认。
-func (s *Save) Pending(desired map[int]bool) []string {
-	var out []string
-	for _, t := range s.Teams {
-		want, ok := desired[t.Slot]
-		if !ok || !t.Present || want == t.IsAI {
-			continue
-		}
-		from, to := t.Kind(), "人类"
-		if want {
-			to = "AI"
-		}
-		out = append(out, fmt.Sprintf("%s：%s → %s", t.Name, from, to))
 	}
 	return out
 }
@@ -605,26 +577,6 @@ func (s *Save) verifyChanges(data []byte, changes map[int]Change) error {
 	return nil
 }
 
-func changesToTargets(changes map[int]Change) map[int]bool {
-	out := make(map[int]bool)
-	for slot, c := range changes {
-		if c.IsAI != nil {
-			out[slot] = *c.IsAI
-		}
-	}
-	return out
-}
-
-// Apply 保持旧接口，供自动修复和现有测试使用。
-func (s *Save) Apply(desired map[int]bool) ([]byte, []string, error) {
-	changes := make(map[int]Change, len(desired))
-	for slot, isAI := range desired {
-		v := isAI
-		changes[slot] = Change{IsAI: &v}
-	}
-	return s.ApplyChanges(changes)
-}
-
 type edit struct {
 	at     int
 	remove int
@@ -654,21 +606,4 @@ func (s *Save) pack(buf []byte) ([]byte, error) {
 	out = append(out, i32(int32(gz.Len()))...)
 	out = append(out, gz.Bytes()...)
 	return append(out, s.tail...), nil
-}
-
-// verify 重新解析新存档，确认结构与目标类型都正确。
-func (s *Save) verify(data []byte, desired map[int]bool) error {
-	got, err := Load(data)
-	if err != nil {
-		return err
-	}
-	if len(got.Teams) != len(s.Teams) {
-		return errors.New("队伍数量不一致")
-	}
-	for _, t := range got.Teams {
-		if want, ok := desired[t.Slot]; ok && t.Present && t.IsAI != want {
-			return fmt.Errorf("队伍 %s 的类型未生效", t.Name)
-		}
-	}
-	return nil
 }
