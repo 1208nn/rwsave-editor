@@ -68,7 +68,7 @@ func main() {
 	dlg := iup.Dialog(tabs)
 	dlg.SetAttribute("TITLE", "铁锈战争 存档 AI 编辑器（IUP）")
 	dlg.SetAttribute("MARGIN", "8x8")
-	dlg.SetAttribute("RASTERSIZE", "600x340")
+	dlg.SetAttribute("RASTERSIZE", "780x560")
 	dlg.SetAttribute("MINSIZE", "380x300")
 
 	iup.Show(dlg)
@@ -80,6 +80,7 @@ func main() {
 
 func (a *app) singleTab() iup.Ihandle {
 	a.info = iup.Label("")
+	a.info.SetAttribute("EXPAND", "HORIZONTAL")
 
 	a.placeholder = iup.Label("尚未读取存档")
 
@@ -138,6 +139,7 @@ func (a *app) singleTab() iup.Ihandle {
 
 func (a *app) dirTab() iup.Ihandle {
 	a.dirInfo = iup.Label("")
+	a.dirInfo.SetAttribute("EXPAND", "HORIZONTAL")
 	a.dirEdit = iup.Text()
 	a.dirEdit.SetAttribute("EXPAND", "HORIZONTAL")
 
