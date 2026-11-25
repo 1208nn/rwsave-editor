@@ -125,10 +125,15 @@ func (a *app) dirTab() []gowt.Option {
 		gowt.HBox(gowt.GrowX(),
 			gowt.Text(gowt.Ref(&a.dir), gowt.GrowX()),
 			gowt.Button("…", gowt.OnClick(a.browseDir)),
-			gowt.Button("自动处理", gowt.OnClick(a.fixDir)),
+			gowt.Button("预览", gowt.OnClick(a.previewDir)),
+			gowt.Button("处理", gowt.OnClick(a.applyDir)),
 		),
 		gowt.Label("", gowt.Ref(&a.dirInfo)),
 	}
+}
+
+func (a *app) dirPath() string {
+	return strings.Trim(strings.TrimSpace(a.dir.Text()), `"`)
 }
 
 // initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
@@ -284,8 +289,8 @@ func (a *app) write() {
 	a.status.SetText("已写回；备份：" + bak)
 }
 
-func (a *app) fixDir() {
-	dir := strings.Trim(strings.TrimSpace(a.dir.Text()), `"`)
+func (a *app) previewDir() {
+	dir := a.dirPath()
 	if dir == "" {
 		a.dirInfo.SetText("请先选择目录")
 		return
@@ -295,14 +300,23 @@ func (a *app) fixDir() {
 		a.dirInfo.SetText("读取目录失败：" + err.Error())
 		return
 	}
-	n := 0
+	var files []string
 	for _, r := range preview {
 		if r.Status == "可修复" {
-			n++
+			files = append(files, r.File)
 		}
 	}
-	if n == 0 {
+	if len(files) == 0 {
 		a.dirInfo.SetText("所有存档都无需修复")
+		return
+	}
+	a.dirInfo.SetText(fmt.Sprintf("可修复 %d 个：%s", len(files), strings.Join(files, "、")))
+}
+
+func (a *app) applyDir() {
+	dir := a.dirPath()
+	if dir == "" {
+		a.dirInfo.SetText("请先选择目录")
 		return
 	}
 	results, err := core.FixDir(dir, false)
@@ -316,5 +330,13 @@ func (a *app) fixDir() {
 			modified++
 		}
 	}
-	a.dirInfo.SetText(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
+	if modified == 0 {
+		a.dirInfo.SetText("所有存档都无需修复")
+	} else {
+		if modified == 0 {
+			a.dirInfo.SetText("所有存档都无需修复")
+		} else {
+			a.dirInfo.SetText(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
+		}
+	}
 }

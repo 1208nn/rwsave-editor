@@ -313,14 +313,19 @@ func (a *app) dirTab(host ui.App) ui.View {
 		ui.HBox(
 			ui.TextInput().BindText(&a.dir).MainWeight(1).Placeholder("存档目录"),
 			ui.Button("…").OnClick(func() { a.browse(host, true) }),
-			ui.Button("自动处理").OnClick(a.fixDir),
+			ui.Button("预览").OnClick(a.previewDir),
+			ui.Button("处理").OnClick(a.applyDir),
 		).Spacing(8),
 		ui.Label("").BindText(&a.dirLog),
 	).Spacing(12).Padding(16).CrossAlign(layout.CrossStretch)
 }
 
-func (a *app) fixDir() {
-	dir := strings.Trim(strings.TrimSpace(a.dir.Get()), `"`)
+func (a *app) dirPath() string {
+	return strings.Trim(strings.TrimSpace(a.dir.Get()), `"`)
+}
+
+func (a *app) previewDir() {
+	dir := a.dirPath()
 	if dir == "" {
 		a.dirLog.Set("请先选择目录")
 		return
@@ -330,14 +335,23 @@ func (a *app) fixDir() {
 		a.dirLog.Set("读取目录失败：" + err.Error())
 		return
 	}
-	n := 0
+	var files []string
 	for _, r := range preview {
 		if r.Status == "可修复" {
-			n++
+			files = append(files, r.File)
 		}
 	}
-	if n == 0 {
+	if len(files) == 0 {
 		a.dirLog.Set("所有存档都无需修复")
+		return
+	}
+	a.dirLog.Set(fmt.Sprintf("可修复 %d 个：%s", len(files), strings.Join(files, "、")))
+}
+
+func (a *app) applyDir() {
+	dir := a.dirPath()
+	if dir == "" {
+		a.dirLog.Set("请先选择目录")
 		return
 	}
 	results, err := core.FixDir(dir, false)
@@ -351,5 +365,13 @@ func (a *app) fixDir() {
 			modified++
 		}
 	}
-	a.dirLog.Set(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
+	if modified == 0 {
+		a.dirLog.Set("所有存档都无需修复")
+	} else {
+		if modified == 0 {
+			a.dirLog.Set("所有存档都无需修复")
+		} else {
+			a.dirLog.Set(fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
+		}
+	}
 }

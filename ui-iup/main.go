@@ -146,7 +146,8 @@ func (a *app) dirTab() iup.Ihandle {
 	dirRow := iup.Hbox(
 		a.dirEdit,
 		iup.On(iup.Button("…"), iup.ActionCB, func(iup.Ihandle) int { a.pickDir(); return iup.DEFAULT }),
-		iup.On(iup.Button("自动处理"), iup.ActionCB, func(iup.Ihandle) int { a.fixDir(); return iup.DEFAULT }),
+		iup.On(iup.Button("预览"), iup.ActionCB, func(iup.Ihandle) int { a.previewDir(); return iup.DEFAULT }),
+		iup.On(iup.Button("处理"), iup.ActionCB, func(iup.Ihandle) int { a.applyDir(); return iup.DEFAULT }),
 	)
 	dirRow.SetAttribute("EXPAND", "HORIZONTAL")
 	dirRow.SetAttribute("GAP", "6")
@@ -325,8 +326,12 @@ func (a *app) write() {
 	a.info.SetAttribute("TITLE", "已写回；备份："+bak)
 }
 
-func (a *app) fixDir() {
-	dir := strings.Trim(strings.TrimSpace(a.dirEdit.GetAttribute("VALUE")), `"`)
+func (a *app) dirPath() string {
+	return strings.Trim(strings.TrimSpace(a.dirEdit.GetAttribute("VALUE")), `"`)
+}
+
+func (a *app) previewDir() {
+	dir := a.dirPath()
 	if dir == "" {
 		a.dirInfo.SetAttribute("TITLE", "请先选择目录")
 		return
@@ -337,16 +342,26 @@ func (a *app) fixDir() {
 		a.dirInfo.SetAttribute("TITLE", "读取目录失败："+err.Error())
 		return
 	}
-	n := 0
+	var files []string
 	for _, r := range preview {
 		if r.Status == "可修复" {
-			n++
+			files = append(files, r.File)
 		}
 	}
-	if n == 0 {
+	if len(files) == 0 {
 		a.dirInfo.SetAttribute("TITLE", "所有存档都无需修复")
 		return
 	}
+	a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("可修复 %d 个：%s", len(files), strings.Join(files, "、")))
+}
+
+func (a *app) applyDir() {
+	dir := a.dirPath()
+	if dir == "" {
+		a.dirInfo.SetAttribute("TITLE", "请先选择目录")
+		return
+	}
+	a.dir = strings.TrimRight(dir, `\/`)
 	results, err := core.FixDir(dir, false)
 	if err != nil {
 		a.dirInfo.SetAttribute("TITLE", "修复失败："+err.Error())
@@ -358,7 +373,15 @@ func (a *app) fixDir() {
 			modified++
 		}
 	}
-	a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
+	if modified == 0 {
+		a.dirInfo.SetAttribute("TITLE", "所有存档都无需修复")
+	} else {
+		if modified == 0 {
+			a.dirInfo.SetAttribute("TITLE", "所有存档都无需修复")
+		} else {
+			a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
+		}
+	}
 }
 
 // initialDiff 计算难度下拉框的初始选中项：队名带难度词用检测值，
