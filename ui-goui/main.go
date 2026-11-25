@@ -265,14 +265,13 @@ func (a *app) changes() (map[int]core.Change, error) {
 
 func (a *app) write() {
 	s := a.save.Get()
-	p := strings.Trim(strings.TrimSpace(a.path.Get()), `"`)
+	if s == nil {
+		a.log.Set("请先读取存档")
+		return
+	}
 	changes, err := a.changes()
 	if err != nil {
 		a.log.Set(err.Error())
-		return
-	}
-	if s == nil {
-		a.log.Set("请先读取存档")
 		return
 	}
 	out, _, err := s.ApplyChanges(changes)
@@ -280,6 +279,7 @@ func (a *app) write() {
 		a.log.Set("写回失败：" + err.Error())
 		return
 	}
+	p := strings.Trim(strings.TrimSpace(a.path.Get()), `"`)
 	bak, err := core.WriteWithBackup(p, out)
 	if err != nil {
 		a.log.Set("写入失败：" + err.Error())

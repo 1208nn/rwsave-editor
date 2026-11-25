@@ -185,19 +185,18 @@ func (a *app) load(path string) {
 		}
 		n++
 	}
-	for i := n; i < maxRows; i++ {
-		r := &a.rows[i]
-		r.slot.SetText("")
-		r.name.SetText("")
-		r.diff.SetText("")
-		r.credits.SetText("")
-		r.ally.SetText("")
-	}
 	for i := 0; i < maxRows; i++ {
 		r := &a.rows[i]
 		show := i < n
 		for _, w := range []gowt.Widget{r.slot, r.name, r.diff, r.credits, r.ally, r.pick} {
 			w.SetVisible(show)
+		}
+		if !show {
+			r.slot.SetText("")
+			r.name.SetText("")
+			r.diff.SetText("")
+			r.credits.SetText("")
+			r.ally.SetText("")
 		}
 	}
 	a.scroll.Fit()

@@ -190,13 +190,11 @@ func (a *app) load(path string) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		iup.Message("读取失败", "路径："+path+"\n\n"+err.Error())
 		a.info.SetAttribute("TITLE", "读取失败："+err.Error())
 		return
 	}
 	s, err := core.Load(data)
 	if err != nil {
-		iup.Message("解析失败", "文件："+path+"\n\n"+err.Error())
 		a.info.SetAttribute("TITLE", "解析失败："+err.Error())
 		return
 	}
@@ -337,7 +335,7 @@ func (a *app) fixDir() {
 		}
 	}
 	if n == 0 {
-		a.dirInfo.SetAttribute("TITLE", "没有需要修复的存档")
+		a.dirInfo.SetAttribute("TITLE", "所有存档都无需修复")
 		return
 	}
 	results, err := core.FixDir(dir, false)
