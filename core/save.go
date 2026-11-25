@@ -10,6 +10,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -48,6 +49,34 @@ func (t Team) CanSetHuman() bool { return !t.IsAI || t.aiStateLen > 0 }
 func LooksLikeAI(name string) bool {
 	n := strings.ToLower(strings.TrimSpace(name))
 	return n == "ai" || strings.HasPrefix(n, "ai ") || strings.HasPrefix(n, "ai-") || strings.HasPrefix(n, "ai_")
+}
+
+func DifficultyFromName(name string) int32 {
+	f := strings.FieldsFunc(name, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	for i, w := range f {
+		if w == "Very" && i+1 < len(f) {
+			switch f[i+1] {
+			case "Easy":
+				return 0
+			case "Hard":
+				return 4
+			}
+			continue
+		}
+		switch w {
+		case "Impossible":
+			return 5
+		case "Medium":
+			return 2
+		case "Easy":
+			return 1
+		case "Hard":
+			return 3
+		}
+	}
+	return -1
 }
 
 // AutoTargets 给出一键修复的目标：名字像人机、却被存成人类的队伍。
@@ -475,6 +504,11 @@ func (s *Save) ApplyChanges(changes map[int]Change) ([]byte, []string, error) {
 				flag = 1
 				edits = append(edits, edit{at: t.stateStart, insert: canonicalAI(t.Slot)})
 				logs = append(logs, t.Name+"：人类 → AI")
+				// 队名带难度词（如 "AI - Very Hard"）时，把难度一并写进队伍记录。
+				if d := DifficultyFromName(t.Name); d >= 0 {
+					at := t.recStart + 12 + 3 + modifiedUTFLen(t.Name) + 14 // 名字后的 PENDING/ping/lastPingTime/isAI 之后
+					edits = append(edits, edit{at: at, remove: 4, insert: i32(d)})
+				}
 			} else {
 				edits = append(edits, edit{at: t.stateStart - t.aiStateLen, remove: t.aiStateLen})
 				logs = append(logs, t.Name+"：AI → 人类")
