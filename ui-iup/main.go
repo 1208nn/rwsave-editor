@@ -13,10 +13,18 @@ import (
 	"rwsave-editor/core"
 )
 
-// 表头与行共用列宽规则，保证对齐。名称列弹性伸缩，其余固定。
+// 表头与行共用列宽规则，保证对齐。宽度 0 表示自适应，高度统一 22。
 var columns = []struct{ title, width string }{
-	{"槽位", "40x22"}, {"玩家名称", ""}, {"难度", "65x22"},
+	{"槽位", "40x22"}, {"玩家名称", "0x22"}, {"难度", "65x22"},
 	{"资金", "90x22"}, {"阵营", "50x22"}, {"控制", "90x22"},
+}
+
+// applyCol 统一设置列宽：固定高度，宽度为 0 的列横向伸缩。
+func applyCol(h iup.Ihandle, width string) {
+	h.SetAttribute("RASTERSIZE", width)
+	if strings.HasPrefix(width, "0x") {
+		h.SetAttribute("EXPAND", "HORIZONTAL")
+	}
 }
 
 type row struct {
@@ -79,11 +87,7 @@ func (a *app) singleTab() iup.Ihandle {
 	for _, c := range columns {
 		l := iup.Label(c.title)
 		l.SetAttribute("ALIGNMENT", "ALEFT")
-		if c.width == "" {
-			l.SetAttribute("EXPAND", "HORIZONTAL")
-		} else {
-			l.SetAttribute("RASTERSIZE", c.width)
-		}
+		applyCol(l, c.width)
 		header = append(header, l)
 	}
 	headRow := iup.Hbox(header...)
@@ -225,11 +229,7 @@ func (a *app) load(path string) {
 		r.pick.SetAttribute("DROPDOWN", "YES")
 		r.pick.SetAttribute("VALUE", pickValue(t.IsAI))
 		for i, h := range []iup.Ihandle{r.slotLabel, r.name, r.diff, r.credits, r.ally, r.pick} {
-			if columns[i].width == "" {
-				h.SetAttribute("EXPAND", "HORIZONTAL")
-			} else {
-				h.SetAttribute("RASTERSIZE", columns[i].width)
-			}
+			applyCol(h, columns[i].width)
 		}
 		r.box = iup.Hbox(r.slotLabel, r.name, r.diff, r.credits, r.ally, r.pick)
 		r.box.SetAttribute("ALIGNMENT", "ACENTER")
