@@ -57,7 +57,7 @@ func newApp(host *gowt.App) *app {
 		gowt.Padding(0),
 		gowt.Tabs(
 			gowt.Tab("单个存档", a.singleTab()...),
-			gowt.Tab("批量修复目录", a.dirTab()...),
+			gowt.Tab("批量修正", a.dirTab()...),
 			gowt.Grow(),
 		),
 	)
@@ -108,8 +108,8 @@ func (a *app) singleTab() []gowt.Option {
 	opts = append(opts, gowt.Scroll(gowt.Grow(), gowt.Ref(&a.scroll)))
 	opts = append(opts,
 		gowt.HBox(
-			gowt.Button("一键自动修复", gowt.OnClick(a.autoFix)),
-			gowt.Button("写回存档", gowt.OnClick(a.write)),
+			gowt.Button("自动识别", gowt.OnClick(a.autoFix)),
+			gowt.Button("保存", gowt.OnClick(a.write)),
 		),
 		gowt.Label("", gowt.Ref(&a.status)),
 	)
@@ -121,17 +121,19 @@ func (a *app) dirTab() []gowt.Option {
 		gowt.HBox(gowt.GrowX(),
 			gowt.Text(gowt.Ref(&a.dir), gowt.GrowX()),
 			gowt.Button("…", gowt.OnClick(a.browseDir)),
-			gowt.Button("一键修复此目录", gowt.OnClick(a.fixDir)),
+			gowt.Button("自动处理", gowt.OnClick(a.fixDir)),
 		),
 		gowt.Label("", gowt.Ref(&a.dirInfo)),
 	}
 }
 
+var diffNames = [...]string{"非常简单", "简单", "中等", "困难", "非常困难", "炼狱"}
+
 func diffText(t core.Team) string {
-	if !t.IsAI {
+	if !t.IsAI || t.Difficulty < 0 || int(t.Difficulty) >= len(diffNames) {
 		return ""
 	}
-	return fmt.Sprint(t.Difficulty)
+	return diffNames[t.Difficulty]
 }
 
 func (a *app) browseFile() {
@@ -226,7 +228,7 @@ func (a *app) autoFix() {
 		}
 		i++
 	}
-	a.status.SetText(fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「写回存档」", len(hits)))
+	a.status.SetText(fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「保存」", len(hits)))
 }
 
 func (a *app) write() {

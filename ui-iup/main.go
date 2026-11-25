@@ -97,8 +97,8 @@ func (a *app) singleTab() iup.Ihandle {
 	scroll.SetAttribute("EXPAND", "YES")
 
 	a.anchor = iup.Hbox(
-		iup.On(iup.Button("一键自动修复"), iup.ActionCB, func(iup.Ihandle) int { a.autoFix(); return iup.DEFAULT }),
-		iup.On(iup.Button("写回存档"), iup.ActionCB, func(iup.Ihandle) int { a.write(); return iup.DEFAULT }),
+		iup.On(iup.Button("自动识别"), iup.ActionCB, func(iup.Ihandle) int { a.autoFix(); return iup.DEFAULT }),
+		iup.On(iup.Button("保存"), iup.ActionCB, func(iup.Ihandle) int { a.write(); return iup.DEFAULT }),
 	)
 	a.anchor.SetAttribute("GAP", "6")
 	a.anchor.SetAttribute("EXPAND", "HORIZONTAL")
@@ -140,7 +140,7 @@ func (a *app) dirTab() iup.Ihandle {
 	dirRow := iup.Hbox(
 		a.dirEdit,
 		iup.On(iup.Button("…"), iup.ActionCB, func(iup.Ihandle) int { a.pickDir(); return iup.DEFAULT }),
-		iup.On(iup.Button("一键修复此目录"), iup.ActionCB, func(iup.Ihandle) int { a.fixDir(); return iup.DEFAULT }),
+		iup.On(iup.Button("自动处理"), iup.ActionCB, func(iup.Ihandle) int { a.fixDir(); return iup.DEFAULT }),
 	)
 	dirRow.SetAttribute("EXPAND", "HORIZONTAL")
 	dirRow.SetAttribute("GAP", "6")
@@ -151,7 +151,7 @@ func (a *app) dirTab() iup.Ihandle {
 	)
 	tab.SetAttribute("GAP", "6")
 	tab.SetAttribute("EXPAND", "YES")
-	tab.SetAttribute("TABTITLE", "批量修复目录")
+	tab.SetAttribute("TABTITLE", "批量修正")
 	return tab
 }
 
@@ -275,7 +275,7 @@ func (a *app) autoFix() {
 			a.rows[i].pick.SetAttribute("VALUE", "2")
 		}
 	}
-	a.info.SetAttribute("TITLE", fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「写回存档」", len(hits)))
+	a.info.SetAttribute("TITLE", fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「保存」", len(hits)))
 }
 
 func (a *app) write() {
@@ -352,11 +352,13 @@ func (a *app) fixDir() {
 	a.dirInfo.SetAttribute("TITLE", fmt.Sprintf("处理 %d 个存档，修复 %d 个。", len(results), modified))
 }
 
+var diffNames = [...]string{"非常简单", "简单", "中等", "困难", "非常困难", "炼狱"}
+
 func diffText(t core.Team) string {
-	if !t.IsAI {
+	if !t.IsAI || t.Difficulty < 0 || int(t.Difficulty) >= len(diffNames) {
 		return ""
 	}
-	return fmt.Sprint(t.Difficulty)
+	return diffNames[t.Difficulty]
 }
 
 func pickValue(isAI bool) string {

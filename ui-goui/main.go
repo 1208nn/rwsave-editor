@@ -72,7 +72,7 @@ func main() {
 						ui.HeaderBar(wui.TabBar("main")).Padding(4),
 						wui.TabView(
 							wui.TabPage("single", a.singleTab(host)).Title("单个存档"),
-							wui.TabPage("batch", a.dirTab(host)).Title("批量修复目录"),
+							wui.TabPage("batch", a.dirTab(host)).Title("批量修正"),
 						).ID("main").MainWeight(1),
 					)),
 			)
@@ -95,8 +95,8 @@ func (a *app) singleTab(host ui.App) ui.View {
 		ui.ScrollView(ui.Build(func() ui.View { return a.rowsView() })).
 			Direction(ui.ScrollBoth).MainWeight(1),
 		ui.HBox(
-			ui.Button("一键自动修复").OnClick(a.autoFix),
-			ui.Button("写回存档").OnClick(a.write),
+			ui.Button("自动识别").OnClick(a.autoFix),
+			ui.Button("保存").OnClick(a.write),
 		).Spacing(8),
 		ui.Label("").BindText(&a.log),
 	).Spacing(12).Padding(16).CrossAlign(layout.CrossStretch)
@@ -144,11 +144,13 @@ func (a *app) rowsView() ui.View {
 	return ui.VBox(rows...).Spacing(6).CrossAlign(layout.CrossStretch)
 }
 
+var diffNames = [...]string{"非常简单", "简单", "中等", "困难", "非常困难", "炼狱"}
+
 func diffText(t core.Team) string {
-	if !t.IsAI {
+	if !t.IsAI || t.Difficulty < 0 || int(t.Difficulty) >= len(diffNames) {
 		return ""
 	}
-	return fmt.Sprint(t.Difficulty)
+	return diffNames[t.Difficulty]
 }
 
 func (a *app) setTarget(i int, isAI bool) {
@@ -237,7 +239,7 @@ func (a *app) autoFix() {
 		i++
 	}
 	a.targets.Set(ts)
-	a.log.Set(fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「写回存档」", len(hits)))
+	a.log.Set(fmt.Sprintf("已把 %d 个队伍标为 AI，检查后点「保存」", len(hits)))
 }
 
 func (a *app) changes() (map[int]core.Change, error) {
@@ -294,7 +296,7 @@ func (a *app) dirTab(host ui.App) ui.View {
 		ui.HBox(
 			ui.TextInput().BindText(&a.dir).MainWeight(1).Placeholder("存档目录"),
 			ui.Button("…").OnClick(func() { a.browse(host, true) }),
-			ui.Button("一键修复此目录").OnClick(a.fixDir),
+			ui.Button("自动处理").OnClick(a.fixDir),
 		).Spacing(8),
 		ui.Label("").BindText(&a.dirLog),
 	).Spacing(12).Padding(16).CrossAlign(layout.CrossStretch)
